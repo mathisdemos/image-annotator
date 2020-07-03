@@ -27,9 +27,6 @@ import {Circle as CircleStyle, Fill, Stroke, Style} from 'ol/style';
 import ol_interaction_Transform from 'ol-ext/interaction/Transform';
 import throttle from 'lodash.throttle'
 
-
-var currentVertex = null
-
 export default {
   name: 'ImageAnnotator',
 
@@ -119,33 +116,23 @@ export default {
       });
 
       // MODIFIY INTERACTION
-      this.modifyInteraction = new Modify({source: boxLayerSource, insertVertexCondition: () => false});
-      this.modifyInteraction.on('modifystart', (e) => {
-        console.log('modify start')
-        const feature = e.features.getArray()[0]
-        const initCoordinates = feature.getGeometry().getCoordinates()[0]
-        feature.on('change', (e) => {
-          console.log('change')
-          // console.log(this.modifyInteraction.getProperties())
-          const newCoords = e.target.getGeometry().getCoordinates()[0]
-          // console.log(initCoordinates, newCoords)
-          // console.log('changed', newCoords)
-
-          initCoordinates.forEach((point, idx) => {
-
-            if (!currentVertex || currentVertex === -1) {
-              currentVertex = newCoords.find((coordArray, idx) => {
-                return coordArray[0] !== initCoordinates[idx][0] || coordArray[1] !== initCoordinates[idx][1]
-              })
-              console.log(currentVertex)
-            }
-            console.log('init coords', initCoordinates)
-            console.log('new coords', newCoords)
-            console.log(currentVertex)
-
-
-          })
-        });
+      // this.modifyInteraction = new Modify({source: boxLayerSource, insertVertexCondition: () => false});
+      // this.modifyInteraction.on('modifystart', (e) => {
+      //   console.log('modify start')
+      //   const feature = e.features.getArray()[0]
+      //   const initCoordinates = feature.getGeometry().getCoordinates()[0]
+      //
+      //   feature.on('change', (e) => {
+      //     const newCoords = e.target.getGeometry().getCoordinates()[0]
+      //
+      //     initCoordinates.forEach((point, idx) => {
+      //       if (!this.currentVertex || this.currentVertex === -1) {
+      //         this.currentVertex = newCoords.find((coordArray, idx) => {
+      //           return coordArray[0] !== point[0] || coordArray[1] !== point[1]
+      //         })
+      //       }
+      //     })
+      //   });
 
         // function modifySiblingCorners (e) {
         //   const newCoords = e.target.getGeometry().getCoordinates()[0]
@@ -166,13 +153,13 @@ export default {
         //   // feature.on('change', modifySiblingCorners);
         // }
 
-        this.modifyInteraction.on('modifyend', (e) => {
-          console.log('modify end')
-          // const feature = e.features.getArray()[0];
-          // feature.un('change', modifySiblingCorners);
-          currentVertex = null
-        });
-        this.map.addInteraction(this.modifyInteraction);
+        // this.modifyInteraction.on('modifyend', (e) => {
+        //   console.log('modify end')
+        //   // const feature = e.features.getArray()[0];
+        //   // feature.un('change', modifySiblingCorners);
+        //   this.currentVertex = null
+        // });
+        // this.map.addInteraction(this.modifyInteraction)
 
         // DRAW INTERACTION
         this.drawInteraction = new Draw({
@@ -180,7 +167,7 @@ export default {
           type: 'Circle',
           geometryFunction: createBox()
         })
-        this.map.addInteraction(this.drawInteraction);
+        this.map.addInteraction(this.drawInteraction)
 
         // this.transformInteraction = new ol.interaction.Transform( {
         //   enableRotatedTransform: false,
@@ -229,7 +216,6 @@ export default {
         //   this.transformInteraction.select(feature, true)
         //   this.map.addInteraction(this.transformInteraction)
         // })
-      })
     }
   },
 

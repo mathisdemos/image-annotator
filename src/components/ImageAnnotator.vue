@@ -302,7 +302,8 @@ export default {
           const maxChange = findMaxChange(changed)
           const finalCoords = setSimilarCoordinates(maxChange.old, maxChange.coord, oldCoordinates)
           console.log(finalCoords)
-          modified.getGeometry().setCoordinates(finalCoords)
+          console.log(modified.getGeometry().getCoordinates())
+          modified.getGeometry().setCoordinates([finalCoords])
 
           // const feature = e.features.getArray()[0];
           // feature.un('change', modifySiblingCorners);

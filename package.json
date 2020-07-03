@@ -9,6 +9,9 @@
   },
   "dependencies": {
     "core-js": "^3.6.5",
+    "lodash.throttle": "^4.1.1",
+    "ol": "^6.3.1",
+    "ol-ext": "^3.1.13",
     "vue": "^2.6.11"
   },
   "devDependencies": {
@@ -32,7 +35,10 @@
     "parserOptions": {
       "parser": "babel-eslint"
     },
-    "rules": {}
+    "rules": {
+      "no-debugger": "off",
+      "no-unused-vars": "off"
+    }
   },
   "browserslist": [
     "> 1%",

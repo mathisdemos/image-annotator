@@ -124,7 +124,7 @@ export default {
         console.log('modify start')
         const feature = e.features.getArray()[0]
         const initCoordinates = feature.getGeometry().getCoordinates()[0]
-        feature.on('change',(e) => {
+        feature.on('change', (e) => {
           console.log('change')
           // console.log(this.modifyInteraction.getProperties())
           const newCoords = e.target.getGeometry().getCoordinates()[0]
@@ -132,110 +132,104 @@ export default {
           // console.log('changed', newCoords)
 
           initCoordinates.forEach((point, idx) => {
-            if ((point[0] !== newCoords[idx][0] || point[1] !== newCoords[idx][1]) && (Math.abs(point[0] - newCoords[idx][0]) > 30 || Math.abs(point[1] - newCoords[idx][1]) > 30)) {
-              console.log('foundVertex!', idx)
-              console.log(initCoordinates, newCoords)
+
+            if (!currentVertex || currentVertex === -1) {
+              currentVertex = newCoords.find((coordArray, idx) => {
+                return coordArray[0] !== initCoordinates[idx][0] || coordArray[1] !== initCoordinates[idx][1]
+              })
+              console.log(currentVertex)
             }
+            console.log('init coords', initCoordinates)
+            console.log('new coords', newCoords)
+            console.log(currentVertex)
+
+
           })
+        });
 
-          // if (!currentVertex || currentVertex === -1) {
-          //   currentVertex = newCoords.find((coordArray, idx) => {
-          //     return coordArray[0] !== initCoordinates[idx][0] || coordArray[1] !== initCoordinates[idx][1]
-          //   })
-          //   console.log(currentVertex)
-          // }
-          // console.log('init coords', initCoordinates)
-          // console.log('new coords', newCoords)
-          // console.log(this.currentVertex)
+        // function modifySiblingCorners (e) {
+        //   const newCoords = e.target.getGeometry().getCoordinates()[0]
+        //   console.log(this.initCoordinates)
+        //   console.log('changed', newCoords)
+        //   // const extent = geometry.getExtent()
+        //   // const newCoords = [[
+        //   //   [extent[0], extent[1]],
+        //   //   [extent[2], extent[1]],
+        //   //   [extent[2], extent[3]],
+        //   //   [extent[0], extent[3]],
+        //   //   [extent[0], extent[1]],
+        //   // ]]
+        //
+        //   // feature.un('change', modifySiblingCorners);
+        //   // geometry.setCoordinates(newCoords, 'XY')
+        //   // // Reenabling change event
+        //   // feature.on('change', modifySiblingCorners);
+        // }
 
+        this.modifyInteraction.on('modifyend', (e) => {
+          console.log('modify end')
+          // const feature = e.features.getArray()[0];
+          // feature.un('change', modifySiblingCorners);
+          currentVertex = null
+        });
+        this.map.addInteraction(this.modifyInteraction);
 
+        // DRAW INTERACTION
+        this.drawInteraction = new Draw({
+          source: boxLayerSource,
+          type: 'Circle',
+          geometryFunction: createBox()
         })
-      });
+        this.map.addInteraction(this.drawInteraction);
 
-      // function modifySiblingCorners (e) {
-      //   const newCoords = e.target.getGeometry().getCoordinates()[0]
-      //   console.log(this.initCoordinates)
-      //   console.log('changed', newCoords)
-      //   // const extent = geometry.getExtent()
-      //   // const newCoords = [[
-      //   //   [extent[0], extent[1]],
-      //   //   [extent[2], extent[1]],
-      //   //   [extent[2], extent[3]],
-      //   //   [extent[0], extent[3]],
-      //   //   [extent[0], extent[1]],
-      //   // ]]
-      //
-      //   // feature.un('change', modifySiblingCorners);
-      //   // geometry.setCoordinates(newCoords, 'XY')
-      //   // // Reenabling change event
-      //   // feature.on('change', modifySiblingCorners);
-      // }
+        // this.transformInteraction = new ol.interaction.Transform( {
+        //   enableRotatedTransform: false,
+        //   hitTolerance: 2,
+        //   stretch: true,
+        //   translateFeature: false,
+        //   scale: false,
+        //   rotate: false,
+        //   keepAspectRatio: false,
+        //   translate: false,
+        // });
+        // this.transformInteraction.setStyle ('scaleh1',
+        //         new Style({
+        //           text: new Text ({
+        //             text:'\uf07d',
+        //             font:"bold 20px Fontawesome",
+        //             fill: new Fill({ color:[255,255,255,0.8] }),
+        //             stroke: new Stroke({ width:2, color:'red' })
+        //           })
+        //         }));
+        // this.transformInteraction.style.scaleh3 = this.transformInteraction.style.scaleh1;
+        // this.transformInteraction.setStyle('scalev',
+        //         new Style({
+        //           text: new Text ({
+        //             text:'\uf07e',
+        //             font:"bold 20px Fontawesome",
+        //             fill: new Fill({ color:[255,255,255,0.8] }),
+        //             stroke: new Stroke({ width:2, color:'red' })
+        //           })
+        //         }));
+        // this.transformInteraction.style.scalev2 = this.transformInteraction.style.scalev;
 
-      this.modifyInteraction.on('modifyend', (e) => {
-        console.log('modify end')
-        // const feature = e.features.getArray()[0];
-        // feature.un('change', modifySiblingCorners);
-        currentVertex = null
-      });
-      this.map.addInteraction(this.modifyInteraction);
 
-      // DRAW INTERACTION
-      this.drawInteraction = new Draw({
-        source: boxLayerSource,
-        type: 'Circle',
-        geometryFunction: createBox()
+        // Style handles
+        // setHandleStyle();
+
+        // this.selectInteraction = new Select()
+        // this.map.addInteraction(this.selectInteraction);
+
+        // SNAP INTERACTION
+        this.map.addInteraction(new Snap({source: boxLayerSource}))
+
+        // this.selectInteraction.on('select', (e) => {
+        //   const feature = e.selected[0]
+        //   console.log(feature)
+        //   this.transformInteraction.select(feature, true)
+        //   this.map.addInteraction(this.transformInteraction)
+        // })
       })
-      this.map.addInteraction(this.drawInteraction);
-
-      // this.transformInteraction = new ol.interaction.Transform( {
-      //   enableRotatedTransform: false,
-      //   hitTolerance: 2,
-      //   stretch: true,
-      //   translateFeature: false,
-      //   scale: false,
-      //   rotate: false,
-      //   keepAspectRatio: false,
-      //   translate: false,
-      // });
-      // this.transformInteraction.setStyle ('scaleh1',
-      //         new Style({
-      //           text: new Text ({
-      //             text:'\uf07d',
-      //             font:"bold 20px Fontawesome",
-      //             fill: new Fill({ color:[255,255,255,0.8] }),
-      //             stroke: new Stroke({ width:2, color:'red' })
-      //           })
-      //         }));
-      // this.transformInteraction.style.scaleh3 = this.transformInteraction.style.scaleh1;
-      // this.transformInteraction.setStyle('scalev',
-      //         new Style({
-      //           text: new Text ({
-      //             text:'\uf07e',
-      //             font:"bold 20px Fontawesome",
-      //             fill: new Fill({ color:[255,255,255,0.8] }),
-      //             stroke: new Stroke({ width:2, color:'red' })
-      //           })
-      //         }));
-      // this.transformInteraction.style.scalev2 = this.transformInteraction.style.scalev;
-
-
-
-
-      // Style handles
-      // setHandleStyle();
-
-      // this.selectInteraction = new Select()
-      // this.map.addInteraction(this.selectInteraction);
-
-      // SNAP INTERACTION
-      this.map.addInteraction(new Snap({source: boxLayerSource}))
-
-      // this.selectInteraction.on('select', (e) => {
-      //   const feature = e.selected[0]
-      //   console.log(feature)
-      //   this.transformInteraction.select(feature, true)
-      //   this.map.addInteraction(this.transformInteraction)
-      // })
     }
   },
 

@@ -31,9 +31,6 @@ import {Vector as VectorSource} from 'ol/source';
 import {Circle as CircleStyle, Fill, Stroke, Style, Text} from 'ol/style';
 import Feature from 'ol/Feature';
 import Polygon from 'ol/geom/Polygon';
-import Collection from 'ol/Collection';
-import ol_interaction_Transform from 'ol-ext/interaction/Transform';
-import throttle from 'lodash.throttle'
 
 export default {
   name: 'ImageAnnotator',
@@ -45,7 +42,10 @@ export default {
       currentFeature: null,
       labelText: '',
       showLabelInput: false,
-      currentFeatures: {}
+      currentFeatures: {},
+      placeholder: null,
+      isStyleApplied: false,
+      initialStyle: {}
     }
   },
 
@@ -137,45 +137,48 @@ export default {
                 [1264, 1251],
                 [238, 1251],
                 [238, 1339]]]},
-            'properties': {'score': 0.9962388277053833, 'label': 'Crossheading'}}]}
+            'properties': {'score': 0.9962388277053833, 'label': 'Crossheading'}},
+          {'type': 'Feature',
+          'id': 'placeholder',
+            'geometry': {'type': 'Polygon',
+              'coordinates': [[[0, 0],
+                [0, 0],
+                [0, 0],
+                [0, 0],
+                [0, 0]]]},}]}
 
       const boxLayerSource = new VectorSource({
         features: (new GeoJSON()).readFeatures(testGeoJSON),
         format: new GeoJSON()
       })
+      this.placeholder = boxLayerSource.getFeatureById('placeholder')
+      this.initialStyle = new Style({
+        fill: new Fill({
+          color: 'rgba(255, 255, 255, 0.2)'
+        }),
+        stroke: new Stroke({
+          color: '#ffcc33',
+          width: 2
+        }),
+        image: new CircleStyle({
+          radius: 7,
+          fill: new Fill({
+            color: '#ffcc33'
+          })
+        }),
+        // text: new Text({
+        //   text: 'abcde',
+        //   font: '20px Arial',
+        //   placement: 'line',
+        //   maxAngle: 0,
+        //   textBaseline: 'top',
+        //   overflow: true,
+        // })
+      })
       const boxLayer = new VectorLayer({
         source: boxLayerSource,
-        style: new Style({
-          fill: new Fill({
-            color: 'rgba(255, 255, 255, 0.2)'
-          }),
-          stroke: new Stroke({
-            color: '#ffcc33',
-            width: 2
-          }),
-          image: new CircleStyle({
-            radius: 7,
-            fill: new Fill({
-              color: '#ffcc33'
-            })
-          }),
-          // text: new Text({
-          //   text: 'abcde',
-          //   font: '20px Arial',
-          //   placement: 'line',
-          //   maxAngle: 0,
-          //   textBaseline: 'top',
-          //   overflow: true,
-          // })
-        })
+        style: this.initialStyle
       });
-
-      this.vectorLayer = boxLayer
-
-      // boxLayer.events.register('vertexmodified', this, function(vertex, feature, pixel) {
-      //   //do something with the vertex
-      //   console.log('vertex modified')
-      // });
 
       this.map = new Map({
         interactions: defaultInteractions({
@@ -206,13 +209,91 @@ export default {
         })
       });
 
+
       // MODIFIY INTERACTION
       this.modifyInteraction = new Modify({source: boxLayerSource, insertVertexCondition: () => false});
+      const applyFeatureUpdate = (e) => {
+        const feature = e.target
+        const featureId = feature.getId()
+        const currentCoordinates = feature.getGeometry().getCoordinates()[0]
+        let initCoords = JSON.parse(JSON.stringify(this.currentFeatures[featureId].initialCoords))
+
+        // make original feature invisible for the duration of the modify interaction
+        // do it only once
+        if (!this.isStyleApplied) {
+          const style = new Style({
+            fill: new Fill({
+              color: 'rgba(255, 255, 255, 0.2)'
+            }),
+            stroke: new Stroke({
+              color: '#ffffff',
+              width: 2
+            }),
+          })
+          // always unregister the change event listener on feature before changing the feature in a way that would cause an infinite loop
+          feature.un('change', applyFeatureUpdate)
+          feature.setStyle(style)
+          this.isStyleApplied = true
+          // re-register event listener when done changing the feature
+          feature.on('change', applyFeatureUpdate)
+        }
+        // use a placeholder geometry that gets the squarified-version of the changed coordinates as its extent
+        const changed = getDifferentCoords(currentCoordinates, initCoords)
+        if (changed) {
+          feature.un('change', applyFeatureUpdate)
+          const max = findMaxChange(changed)
+          initCoords = setSimilarCoordinates(max.old, max.coord, initCoords)
+          this.placeholder.getGeometry().setCoordinates([initCoords])
+          feature.on('change', applyFeatureUpdate)
+        }
+      }
+
+      const getDifferentCoords = (currentCoords, initCoords) => {
+        let hasChanged = false
+        currentCoords.forEach((coordpair, idx) => {
+          if (coordpair[0] !== initCoords[idx][0] || coordpair[1] !== initCoords[idx][1]) {
+            hasChanged = {}
+            hasChanged.newCoords = coordpair
+            hasChanged.oldCoords = initCoords[idx]
+            hasChanged.idx = idx
+          }
+        })
+        return hasChanged
+      }
+
+      const findMaxChange = (changed) => {
+        let out = {}
+        let firstDiff = Math.abs(changed.newCoords[0] - changed.oldCoords[0])
+        let secondDiff = Math.abs(changed.newCoords[1] - changed.oldCoords[1])
+        if (firstDiff > secondDiff) {
+          out.old = changed.oldCoords[0]
+          out.coord = changed.newCoords[0]
+        } else if (firstDiff < secondDiff) {
+          out.old = changed.oldCoords[1]
+          out.coord = changed.newCoords[1]
+        } else {
+          out.old = changed.newCoords[1]
+          out.coord = changed.newCoords[1]
+        }
+        return out
+      }
+
+      function setSimilarCoordinates (oldVal, newVal, coordinates) {
+        let out = []
+        coordinates.forEach(coord => {
+          let changed = coord
+          if (changed[0] === oldVal) {
+            changed[0] = newVal
+          } else if (changed[1] === oldVal) {
+            changed[1] = newVal
+          }
+          out.push(changed)
+        })
+        return out
+      }
 
       this.modifyInteraction.on('modifystart', (e) => {
         console.log('modify start')
-/*        console.log(e.mapBrowserEvent.target)
-        console.log(e.features)*/
         this.currentFeatures = e.features.getArray().reduce((acc, val) => {
           return {
             ...acc,
@@ -222,92 +303,30 @@ export default {
             }
           }
         }, {})
-/*        const feature = e.features.getArray()[0]
-        const modified = e.features.getArray().reduce((acc, val) => {
-          console.log(val.getRevision())
-          return val.getRevision() > 1 || acc
-        }, false)
-        console.log(modified)
-        const initCoordinates = feature.getGeometry().getCoordinates()[0]
-        console.log('init', initCoordinates)
-        console.log(feature)
 
-        feature.on('change', (e) => {
-          const newCoords = e.target.getGeometry().getCoordinates()[0]
-          console.log('new', newCoords)
-
-          initCoordinates.forEach((point, idx) => {
-            if (!this.currentVertex || this.currentVertex === -1) {
-              this.currentVertex = newCoords.find((coordArray, idx) => {
-                return coordArray[0] !== point[0] || coordArray[1] !== point[1]
-              })
-              //console.log(this.currentVertex)
-            }
-          })*/
-        // });
+        // register change event listeners on all features except placeholder so that we can execute code when a feature is modified
+        e.features.getArray().forEach(feature => {
+          if(feature.getId() !== 'placeholder') feature.on('change', applyFeatureUpdate)
+        })
       })
-
-        // function modifySiblingCorners (e) {
-        //   const newCoords = e.target.getGeometry().getCoordinates()[0]
-        //   console.log(this.initCoordinates)
-        //   console.log('changed', newCoords)
-        //   // const extent = geometry.getExtent()
-        //   // const newCoords = [[
-        //   //   [extent[0], extent[1]],
-        //   //   [extent[2], extent[1]],
-        //   //   [extent[2], extent[3]],
-        //   //   [extent[0], extent[3]],
-        //   //   [extent[0], extent[1]],
-        //   // ]]
-        //
-        //   // feature.un('change', modifySiblingCorners);
-        //   // geometry.setCoordinates(newCoords, 'XY')
-        //   // // Reenabling change event
-        //   // feature.on('change', modifySiblingCorners);
-        // }
 
         this.modifyInteraction.on('modifyend', (e) => {
           console.log('modify end')
+
+          // find the modified feature through its revision number
           const modified = e.features.getArray().reduce((acc, val) => {
             const oldFeatureRevision = this.currentFeatures[val.getId()].revision
-            return oldFeatureRevision !== val.getRevision() ? val : acc
+            return val.getId() !== 'placeholder' && oldFeatureRevision !== val.getRevision() ? val : acc
           }, {})
-          const newCoordinates = modified.getGeometry().getCoordinates()[0]
-          const oldCoordinates = this.currentFeatures[modified.getId()].initialCoords
-          const changed = newCoordinates.reduce((acc, val, idx) => {
-            let out = acc
-            const isChanged = val[0] !== oldCoordinates[idx][0] || val[1] !== oldCoordinates[idx][1]
-            if (isChanged) {
-              out.idx = idx
-              out.newCoords = val
-              out.oldCoords = oldCoordinates[idx]
-            }
-            return out
-          }, {})
-          console.log(changed)
-          const findMaxChange = (changed) => {
-            let out = {}
-            let firstDiff = Math.abs(changed.newCoords[0] - changed.oldCoords[0])
-            let secondDiff = Math.abs(changed.newCoords[1] - changed.oldCoords[1])
-            if (firstDiff > secondDiff) {
-              out.old = changed.oldCoords[0]
-              out.coord = changed.newCoords[0]
-            } else {
-              out.old = changed.oldCoords[1]
-              out.coord = changed.newCoords[1]
-            }
-            return out
-          }
 
-          const maxChange = findMaxChange(changed)
-          const finalCoords = setSimilarCoordinates(maxChange.old, maxChange.coord, oldCoordinates)
-          console.log(finalCoords)
-          console.log(modified.getGeometry().getCoordinates())
-          modified.getGeometry().setCoordinates([finalCoords])
+          // squareify the original feature geometry
+          const currentCoordinates = this.placeholder.getGeometry().getCoordinates()
+          modified.getGeometry().setCoordinates(currentCoordinates)
 
-          // const feature = e.features.getArray()[0];
-          // feature.un('change', modifySiblingCorners);
-          this.currentVertex = null
+          // reset styles and placeholder
+          modified.setStyle(this.initialStyle)
+          this.placeholder.getGeometry().setCoordinates([[[0, 0], [0, 0], [0, 0], [0, 0]]])
+          this.isStyleApplied = false
         });
         this.map.addInteraction(this.modifyInteraction)
 
@@ -322,69 +341,9 @@ export default {
         this.currentFeature = e.feature
       })
 
-      function setSimilarCoordinates (oldVal, newVal, coordinates) {
-          let out = []
-          coordinates.forEach(coord => {
-            let changed = coord
-            if (changed[0] === oldVal) {
-              changed[0] = newVal
-            } else if (changed[1] === oldVal) {
-              changed[1] = newVal
-            }
-            out.push(changed)
-          })
-        return out
-      }
-
         this.map.addInteraction(this.drawInteraction)
 
-        // this.transformInteraction = new ol.interaction.Transform( {
-        //   enableRotatedTransform: false,
-        //   hitTolerance: 2,
-        //   stretch: true,
-        //   translateFeature: false,
-        //   scale: false,
-        //   rotate: false,
-        //   keepAspectRatio: false,
-        //   translate: false,
-        // });
-        // this.transformInteraction.setStyle ('scaleh1',
-        //         new Style({
-        //           text: new Text ({
-        //             text:'\uf07d',
-        //             font:"bold 20px Fontawesome",
-        //             fill: new Fill({ color:[255,255,255,0.8] }),
-        //             stroke: new Stroke({ width:2, color:'red' })
-        //           })
-        //         }));
-        // this.transformInteraction.style.scaleh3 = this.transformInteraction.style.scaleh1;
-        // this.transformInteraction.setStyle('scalev',
-        //         new Style({
-        //           text: new Text ({
-        //             text:'\uf07e',
-        //             font:"bold 20px Fontawesome",
-        //             fill: new Fill({ color:[255,255,255,0.8] }),
-        //             stroke: new Stroke({ width:2, color:'red' })
-        //           })
-        //         }));
-        // this.transformInteraction.style.scalev2 = this.transformInteraction.style.scalev;
-
-
-        // Style handles
-        // setHandleStyle();
-
-        // this.selectInteraction = new Select()
-        // this.map.addInteraction(this.selectInteraction);
-
-        // SNAP INTERACTION
-        this.map.addInteraction(new Snap({source: boxLayerSource}))
-
-        // this.selectInteraction.on('select', (e) => {
-        //   const feature = e.selected[0]
-        //   console.log(feature)
-        //   this.transformInteraction.select(feature, true)
-        //   this.map.addInteraction(this.transformInteraction)
-        // })
+        //this.map.addInteraction(new Snap({source: boxLayerSource}))
     }
   },
 

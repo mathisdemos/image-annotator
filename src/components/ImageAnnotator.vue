@@ -1,8 +1,12 @@
 <template>
   <div>
-    <div id="map" class="map"></div>
+    <div id="map" class="map" style="border: 2px solid black"></div>
 <!--    <p>Current interaction: {{ this.currentInteraction }}</p>-->
 <!--    <button @click="toggleInteraction">Toggle interaction</button>-->
+    <div v-if="showLabelInput" >
+      <input v-model="labelText"/>
+      <button @click="setLabel">Set label</button>
+    </div>
   </div>
 </template>
 
@@ -17,13 +21,17 @@ import {getCenter} from 'ol/extent';
 import ImageLayer from 'ol/layer/Image';
 import Projection from 'ol/proj/Projection';
 import Static from 'ol/source/ImageStatic';
+import GeoJSON from 'ol/format/GeoJSON'
 
 // drawing
 import {Draw, Select, Snap, Modify, defaults as defaultInteractions} from 'ol/interaction';
 import {createBox} from 'ol/interaction/Draw';
 import {Vector as VectorLayer} from 'ol/layer';
 import {Vector as VectorSource} from 'ol/source';
-import {Circle as CircleStyle, Fill, Stroke, Style} from 'ol/style';
+import {Circle as CircleStyle, Fill, Stroke, Style, Text} from 'ol/style';
+import Feature from 'ol/Feature';
+import Polygon from 'ol/geom/Polygon';
+import Collection from 'ol/Collection';
 import ol_interaction_Transform from 'ol-ext/interaction/Transform';
 import throttle from 'lodash.throttle'
 
@@ -34,34 +42,101 @@ export default {
     return {
       map: null,
       currentInteraction: 'draw',
+      currentFeature: null,
+      labelText: '',
+      showLabelInput: false
     }
   },
 
   methods: {
-    // toggleInteraction () {
-    //   if (this.currentInteraction === 'draw') {
-    //     this.map.removeInteraction(this.drawInteraction)
-    //     this.map.addInteraction(this.selectInteraction)
-    //     this.currentInteraction = 'select'
-    //   } else if (this.currentInteraction === 'select') {
-    //     this.map.removeInteraction(this.selectInteraction)
-    //     this.map.addInteraction(this.drawInteraction)
-    //     this.currentInteraction = 'draw'
-    //   }
-    // },
+    setLabel () {
+      const style = new Style({
+        fill: new Fill({
+          color: 'rgba(255, 255, 255, 0.2)'
+        }),
+        stroke: new Stroke({
+          color: '#ffcc33',
+          width: 2
+        }),
+        image: new CircleStyle({
+          radius: 7,
+          fill: new Fill({
+            color: '#ffcc33'
+          })
+        }),
+        text: new Text({
+          text: this.labelText,
+          font: '20px Arial',
+          placement: 'line',
+          maxAngle: 0,
+          textBaseline: 'top',
+          overflow: true,
+        })
+      })
+      this.currentFeature.setStyle(style)
+
+      this.labelText = ''
+      this.currentFeature = null
+      this.showLabelInput = false
+    },
 
     initMap() {
       // Map views always need a projection.  Here we just want to map image
       // coordinates directly to map coordinates, so we create a projection that uses
       // the image extent in pixels.
-      const extent = [0, 0, 1024, 968];
+      const extent = [0, 0, 2479, 3508];
       const projection = new Projection({
-        code: 'xkcd-image',
+        code: 'image',
         units: 'pixels',
         extent: extent
       });
 
-      const boxLayerSource = new VectorSource();
+      const testGeoJSON = {'type': 'FeatureCollection',
+        'features': [{'type': 'Feature',
+          'geometry': {'type': 'Polygon',
+            'coordinates': [[[231, 2542],
+              [2222, 2542],
+              [2222, 1494],
+              [231, 1494],
+              [231, 2542]]]},
+          'properties': {'score': 0.9999485015869141, 'label': 'Section'}},
+          {'type': 'Feature',
+            'geometry': {'type': 'Polygon',
+              'coordinates': [[[232, 3054],
+                [2192, 3054],
+                [2192, 2633],
+                [232, 2633],
+                [232, 3054]]]},
+            'properties': {'score': 0.999942421913147, 'label': 'Section'}},
+          {'type': 'Feature',
+            'geometry': {'type': 'Polygon',
+              'coordinates': [[[270, 1221],
+                [2219, 1221],
+                [2219, 809],
+                [270, 809],
+                [270, 1221]]]},
+            'properties': {'score': 0.9999086856842041, 'label': 'Section'}},
+          {'type': 'Feature',
+            'geometry': {'type': 'Polygon',
+              'coordinates': [[[1065, 114],
+                [1416, 114],
+                [1416, 46],
+                [1065, 46],
+                [1065, 114]]]},
+            'properties': {'score': 0.9965907335281372, 'label': 'Page numbers'}},
+          {'type': 'Feature',
+            'geometry': {'type': 'Polygon',
+              'coordinates': [[[238, 1339],
+                [1264, 1339],
+                [1264, 1251],
+                [238, 1251],
+                [238, 1339]]]},
+            'properties': {'score': 0.9962388277053833, 'label': 'Crossheading'}}]}
+
+      const boxLayerSource = new VectorSource({
+        features: (new GeoJSON()).readFeatures(testGeoJSON),
+        format: new GeoJSON()
+      })
       const boxLayer = new VectorLayer({
         source: boxLayerSource,
         style: new Style({
@@ -77,9 +152,19 @@ export default {
             fill: new Fill({
               color: '#ffcc33'
             })
-          })
+          }),
+          // text: new Text({
+          //   text: 'abcde',
+          //   font: '20px Arial',
+          //   placement: 'line',
+          //   maxAngle: 0,
+          //   textBaseline: 'top',
+          //   overflow: true,
+          // })
         })
       });
+
+      this.vectorLayer = boxLayer
 
       // boxLayer.events.register('vertexmodified', this, function(vertex, feature, pixel) {
       //   //do something with the vertex
@@ -100,7 +185,7 @@ export default {
         layers: [
           new ImageLayer({
             source: new Static({
-              url: 'https://imgs.xkcd.com/comics/online_communities.png',
+              url: '/test_image.png',
               projection: projection,
               imageExtent: extent
             })
@@ -116,23 +201,25 @@ export default {
       });
 
       // MODIFIY INTERACTION
-      // this.modifyInteraction = new Modify({source: boxLayerSource, insertVertexCondition: () => false});
-      // this.modifyInteraction.on('modifystart', (e) => {
-      //   console.log('modify start')
-      //   const feature = e.features.getArray()[0]
-      //   const initCoordinates = feature.getGeometry().getCoordinates()[0]
-      //
-      //   feature.on('change', (e) => {
-      //     const newCoords = e.target.getGeometry().getCoordinates()[0]
-      //
-      //     initCoordinates.forEach((point, idx) => {
-      //       if (!this.currentVertex || this.currentVertex === -1) {
-      //         this.currentVertex = newCoords.find((coordArray, idx) => {
-      //           return coordArray[0] !== point[0] || coordArray[1] !== point[1]
-      //         })
-      //       }
-      //     })
-      //   });
+      this.modifyInteraction = new Modify({source: boxLayerSource, insertVertexCondition: () => false});
+
+      this.modifyInteraction.on('modifystart', (e) => {
+        console.log('modify start')
+        const feature = e.features.getArray()[0]
+        const initCoordinates = feature.getGeometry().getCoordinates()[0]
+
+        feature.on('change', (e) => {
+          const newCoords = e.target.getGeometry().getCoordinates()[0]
+
+          initCoordinates.forEach((point, idx) => {
+            if (!this.currentVertex || this.currentVertex === -1) {
+              this.currentVertex = newCoords.find((coordArray, idx) => {
+                return coordArray[0] !== point[0] || coordArray[1] !== point[1]
+              })
+            }
+          })
+        });
+      })
 
         // function modifySiblingCorners (e) {
         //   const newCoords = e.target.getGeometry().getCoordinates()[0]
@@ -153,13 +240,13 @@ export default {
         //   // feature.on('change', modifySiblingCorners);
         // }
 
-        // this.modifyInteraction.on('modifyend', (e) => {
-        //   console.log('modify end')
-        //   // const feature = e.features.getArray()[0];
-        //   // feature.un('change', modifySiblingCorners);
-        //   this.currentVertex = null
-        // });
-        // this.map.addInteraction(this.modifyInteraction)
+        this.modifyInteraction.on('modifyend', (e) => {
+          console.log('modify end')
+          // const feature = e.features.getArray()[0];
+          // feature.un('change', modifySiblingCorners);
+          this.currentVertex = null
+        });
+        this.map.addInteraction(this.modifyInteraction)
 
         // DRAW INTERACTION
         this.drawInteraction = new Draw({
@@ -167,6 +254,11 @@ export default {
           type: 'Circle',
           geometryFunction: createBox()
         })
+      this.drawInteraction.on('drawend', (e,a,b,c,d) => {
+        this.showLabelInput = true
+        this.currentFeature = e.feature
+      })
+
         this.map.addInteraction(this.drawInteraction)
 
         // this.transformInteraction = new ol.interaction.Transform( {
@@ -228,8 +320,8 @@ export default {
 <!-- Add "scoped" attribute to limit CSS to this component only -->
 <style scoped>
 .map {
-  width: 1024px;
-  height: 968px;
+  width: 90vw;
+  height: 120vh;
 
 }
 </style>

@@ -44,7 +44,8 @@ export default {
       currentInteraction: 'draw',
       currentFeature: null,
       labelText: '',
-      showLabelInput: false
+      showLabelInput: false,
+      currentFeatures: {}
     }
   },
 
@@ -93,6 +94,7 @@ export default {
 
       const testGeoJSON = {'type': 'FeatureCollection',
         'features': [{'type': 'Feature',
+          'id': '1',
           'geometry': {'type': 'Polygon',
             'coordinates': [[[231, 2542],
               [2222, 2542],
@@ -101,6 +103,7 @@ export default {
               [231, 2542]]]},
           'properties': {'score': 0.9999485015869141, 'label': 'Section'}},
           {'type': 'Feature',
+            'id': '2',
             'geometry': {'type': 'Polygon',
               'coordinates': [[[232, 3054],
                 [2192, 3054],
@@ -109,6 +112,7 @@ export default {
                 [232, 3054]]]},
             'properties': {'score': 0.999942421913147, 'label': 'Section'}},
           {'type': 'Feature',
+            'id': '3',
             'geometry': {'type': 'Polygon',
               'coordinates': [[[270, 1221],
                 [2219, 1221],
@@ -117,6 +121,7 @@ export default {
                 [270, 1221]]]},
             'properties': {'score': 0.9999086856842041, 'label': 'Section'}},
           {'type': 'Feature',
+            'id': '4',
             'geometry': {'type': 'Polygon',
               'coordinates': [[[1065, 114],
                 [1416, 114],
@@ -125,6 +130,7 @@ export default {
                 [1065, 114]]]},
             'properties': {'score': 0.9965907335281372, 'label': 'Page numbers'}},
           {'type': 'Feature',
+            'id': '5',
             'geometry': {'type': 'Polygon',
               'coordinates': [[[238, 1339],
                 [1264, 1339],
@@ -205,20 +211,40 @@ export default {
 
       this.modifyInteraction.on('modifystart', (e) => {
         console.log('modify start')
-        const feature = e.features.getArray()[0]
+/*        console.log(e.mapBrowserEvent.target)
+        console.log(e.features)*/
+        this.currentFeatures = e.features.getArray().reduce((acc, val) => {
+          return {
+            ...acc,
+            [val.getId()]: {
+              revision: val.getRevision(),
+              initialCoords: JSON.parse(JSON.stringify(val.getGeometry().getCoordinates()[0]))
+            }
+          }
+        }, {})
+/*        const feature = e.features.getArray()[0]
+        const modified = e.features.getArray().reduce((acc, val) => {
+          console.log(val.getRevision())
+          return val.getRevision() > 1 || acc
+        }, false)
+        console.log(modified)
         const initCoordinates = feature.getGeometry().getCoordinates()[0]
+        console.log('init', initCoordinates)
+        console.log(feature)
 
         feature.on('change', (e) => {
           const newCoords = e.target.getGeometry().getCoordinates()[0]
+          console.log('new', newCoords)
 
           initCoordinates.forEach((point, idx) => {
             if (!this.currentVertex || this.currentVertex === -1) {
               this.currentVertex = newCoords.find((coordArray, idx) => {
                 return coordArray[0] !== point[0] || coordArray[1] !== point[1]
               })
+              //console.log(this.currentVertex)
             }
-          })
-        });
+          })*/
+        // });
       })
 
         // function modifySiblingCorners (e) {
@@ -242,6 +268,42 @@ export default {
 
         this.modifyInteraction.on('modifyend', (e) => {
           console.log('modify end')
+          const modified = e.features.getArray().reduce((acc, val) => {
+            const oldFeatureRevision = this.currentFeatures[val.getId()].revision
+            return oldFeatureRevision !== val.getRevision() ? val : acc
+          }, {})
+          const newCoordinates = modified.getGeometry().getCoordinates()[0]
+          const oldCoordinates = this.currentFeatures[modified.getId()].initialCoords
+          const changed = newCoordinates.reduce((acc, val, idx) => {
+            let out = acc
+            const isChanged = val[0] !== oldCoordinates[idx][0] || val[1] !== oldCoordinates[idx][1]
+            if (isChanged) {
+              out.idx = idx
+              out.newCoords = val
+              out.oldCoords = oldCoordinates[idx]
+            }
+            return out
+          }, {})
+          console.log(changed)
+          const findMaxChange = (changed) => {
+            let out = {}
+            let firstDiff = Math.abs(changed.newCoords[0] - changed.oldCoords[0])
+            let secondDiff = Math.abs(changed.newCoords[1] - changed.oldCoords[1])
+            if (firstDiff > secondDiff) {
+              out.old = changed.oldCoords[0]
+              out.coord = changed.newCoords[0]
+            } else {
+              out.old = changed.oldCoords[1]
+              out.coord = changed.newCoords[1]
+            }
+            return out
+          }
+
+          const maxChange = findMaxChange(changed)
+          const finalCoords = setSimilarCoordinates(maxChange.old, maxChange.coord, oldCoordinates)
+          console.log(finalCoords)
+          modified.getGeometry().setCoordinates(finalCoords)
+
           // const feature = e.features.getArray()[0];
           // feature.un('change', modifySiblingCorners);
           this.currentVertex = null
@@ -258,6 +320,20 @@ export default {
         this.showLabelInput = true
         this.currentFeature = e.feature
       })
+
+      function setSimilarCoordinates (oldVal, newVal, coordinates) {
+          let out = []
+          coordinates.forEach(coord => {
+            let changed = coord
+            if (changed[0] === oldVal) {
+              changed[0] = newVal
+            } else if (changed[1] === oldVal) {
+              changed[1] = newVal
+            }
+            out.push(changed)
+          })
+        return out
+      }
 
         this.map.addInteraction(this.drawInteraction)
 

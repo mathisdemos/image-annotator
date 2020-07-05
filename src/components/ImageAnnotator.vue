@@ -230,7 +230,7 @@ export default {
               width: 2
             }),
           })
-          // always unregister the change event listener on feature before changing the feature in a way that would cause an infinite loop
+          // always unregister the change event listener before changing the feature in a way that would cause an infinite loop
           feature.un('change', applyFeatureUpdate)
           feature.setStyle(style)
           this.isStyleApplied = true
@@ -238,17 +238,16 @@ export default {
           feature.on('change', applyFeatureUpdate)
         }
         // use a placeholder geometry that gets the squarified-version of the changed coordinates as its extent
-        const changed = getDifferentCoords(currentCoordinates, initCoords)
+        const changed = getChangedCoordinates(currentCoordinates, initCoords)
         if (changed) {
           feature.un('change', applyFeatureUpdate)
-          const max = findMaxChange(changed)
-          initCoords = setSimilarCoordinates(max.old, max.coord, initCoords)
+          initCoords = setAxisCoordinates(changed.oldCoords, changed.newCoords, initCoords)
           this.placeholder.getGeometry().setCoordinates([initCoords])
           feature.on('change', applyFeatureUpdate)
         }
       }
 
-      const getDifferentCoords = (currentCoords, initCoords) => {
+      const getChangedCoordinates = (currentCoords, initCoords) => {
         let hasChanged = false
         currentCoords.forEach((coordpair, idx) => {
           if (coordpair[0] !== initCoords[idx][0] || coordpair[1] !== initCoords[idx][1]) {
@@ -261,35 +260,20 @@ export default {
         return hasChanged
       }
 
-      const findMaxChange = (changed) => {
-        let out = {}
-        let firstDiff = Math.abs(changed.newCoords[0] - changed.oldCoords[0])
-        let secondDiff = Math.abs(changed.newCoords[1] - changed.oldCoords[1])
-        if (firstDiff > secondDiff) {
-          out.old = changed.oldCoords[0]
-          out.coord = changed.newCoords[0]
-        } else if (firstDiff < secondDiff) {
-          out.old = changed.oldCoords[1]
-          out.coord = changed.newCoords[1]
-        } else {
-          out.old = changed.newCoords[1]
-          out.coord = changed.newCoords[1]
-        }
-        return out
+      const setAxisCoordinates = (oldCoords, newCoords, coordinates) => {
+        let newCoordinates = [ ...coordinates ]
+        oldCoords.forEach((coordinate, idx) => {
+          newCoordinates = changeBoxedArray(coordinate, newCoords[idx], newCoordinates)
+        })
+        return newCoordinates
       }
 
-      function setSimilarCoordinates (oldVal, newVal, coordinates) {
-        let out = []
-        coordinates.forEach(coord => {
-          let changed = coord
-          if (changed[0] === oldVal) {
-            changed[0] = newVal
-          } else if (changed[1] === oldVal) {
-            changed[1] = newVal
-          }
-          out.push(changed)
-        })
-        return out
+      function changeValue (originalValue, changedValue, arrayToChange) {
+        return arrayToChange.map(val => val === originalValue ? changedValue : val)
+      }
+
+      function changeBoxedArray (originalValue, changedValue, boxedArray) {
+        return boxedArray.map(arr => changeValue(originalValue, changedValue, arr))
       }
 
       this.modifyInteraction.on('modifystart', (e) => {
@@ -319,6 +303,11 @@ export default {
             return val.getId() !== 'placeholder' && oldFeatureRevision !== val.getRevision() ? val : acc
           }, {})
 
+          // unregister event listeners because they are not needed anymore
+          e.features.getArray().forEach(feature => {
+            if(feature.getId() !== 'placeholder') feature.un('change', applyFeatureUpdate)
+          })
+
           // squareify the original feature geometry
           const currentCoordinates = this.placeholder.getGeometry().getCoordinates()
           modified.getGeometry().setCoordinates(currentCoordinates)
@@ -327,7 +316,9 @@ export default {
           modified.setStyle(this.initialStyle)
           this.placeholder.getGeometry().setCoordinates([[[0, 0], [0, 0], [0, 0], [0, 0]]])
           this.isStyleApplied = false
-        });
+          this.currentFeatures = {}
+        })
+
         this.map.addInteraction(this.modifyInteraction)
 
         // DRAW INTERACTION
